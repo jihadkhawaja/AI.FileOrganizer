@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LLamaSharp" Version="0.24.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.24.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.24.0" />
+    <PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.24.0" />
+    <PackageReference Include="LLamaSharp.semantic-kernel" Version="0.24.0" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.55.0" />
+  </ItemGroup>
+
+</Project>

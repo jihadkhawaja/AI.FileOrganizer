@@ -27,7 +27,9 @@ namespace AI.FileOrganizer.CLI
 
         public void ListAvailableFunctions()
         {
+            Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("Available File Organizer Functions:");
+            Console.ForegroundColor = ConsoleColor.Cyan;
             foreach (var method in typeof(Organize).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly))
             {
                 if (method.GetCustomAttribute(typeof(Microsoft.SemanticKernel.KernelFunctionAttribute)) is not null)
@@ -37,12 +39,14 @@ namespace AI.FileOrganizer.CLI
                 }
             }
             Console.WriteLine();
+            Console.ResetColor();
         }
 
         public async Task RunAsync()
         {
-            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine("File Organizer CLI (type 'exit' to quit)");
+            Console.ResetColor();
             while (true)
             {
                 Console.Write("\n> ");
@@ -224,7 +228,7 @@ namespace AI.FileOrganizer.CLI
                                 // Process one image at a time
                                 foreach (var imagePath in imagePaths)
                                 {
-                                    var label = await ProcessSingleImage(imagePath, _modelManager.Executor);
+                                    var label = await ProcessSingleImage(imagePath);
                                     if (!string.IsNullOrWhiteSpace(label))
                                     {
                                         imageContextMap[imagePath] = label;
@@ -372,7 +376,7 @@ namespace AI.FileOrganizer.CLI
             }
         }
 
-        private async Task<string> ProcessSingleImage(string imagePath, InteractiveExecutor executor)
+        private async Task<string> ProcessSingleImage(string imagePath)
         {
             if (!File.Exists(imagePath))
             {
@@ -380,95 +384,93 @@ namespace AI.FileOrganizer.CLI
                 return "unknown";
             }
 
-            executor.Images.Clear();
             const int maxTokens = 16;
 
-            // Gemma-compatible prompt format
-            var prompt = $"{{{imagePath}}}\n<start_of_turn>user\nProvide a single short label (e.g. 'animal', 'invoice', 'text', 'nature', 'person', 'screenshot', 'art', 'other') describing the main content of the image. Only output the label.\n<start_of_turn>model\n";
+            var prompt = $"{{{imagePath}}}\nUSER:\nProvide a single short label (e.g. 'animal', 'invoice', 'text', 'nature', 'person', 'screenshot', 'art', 'other') describing the main content of the image. Only output the label.\nASSISTANT:\n";
 
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("The executor has been enabled. In this example, the prompt is printed, the maximum tokens is set to {0} and the context size is {1}.", maxTokens, executor.Context.ContextSize);
-
-            var inferenceParams = new InferenceParams
+            // Llava Init
+            using var clipModel = await LLavaWeights.LoadFromFileAsync(_modelManager.MultiModalProj!);
             {
-                SamplingPipeline = new DefaultSamplingPipeline
-                {
-                    Temperature = 0.1f
-                },
-                MaxTokens = maxTokens
-            };
+                var ex = new InteractiveExecutor(_modelManager.Executor.Context, clipModel);
 
-            // Evaluate if we have images
-            var imageMatches = Regex.Matches(prompt, "{([^}]*)}").Select(m => m.Value);
-            var imageCount = imageMatches.Count();
-            var hasImages = imageCount > 0;
-
-            if (hasImages)
-            {
-                var imagePathsWithCurlyBraces = Regex.Matches(prompt, "{([^}]*)}").Select(m => m.Value);
-                var imagePaths = Regex.Matches(prompt, "{([^}]*)}").Select(m => m.Groups[1].Value).ToList();
-
-                List<byte[]> imageBytes;
-                try
-                {
-                    imageBytes = imagePaths.Select(File.ReadAllBytes).ToList();
-                }
-                catch (IOException exception)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.Write(
-                        $"Could not load your {(imageCount == 1 ? "image" : "images")}:");
-                    Console.Write($"{exception.Message}");
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine("Please try again.");
-                    return string.Empty;
-                }
-
-                // Each prompt with images we clear cache
-                // When the prompt contains images we clear KV_CACHE to restart conversation
-                // See:
-                // https://github.com/ggerganov/llama.cpp/discussions/3620
-                executor.Context.NativeHandle.KvCacheRemove(LLamaSeqId.Zero, -1, -1);
-
-                int index = 0;
-                foreach (var path in imagePathsWithCurlyBraces)
-                {
-                    // First image replace to tag <image, the rest of the images delete the tag
-                    prompt = prompt.Replace(path, index++ == 0 ? $"<image>" : "");
-                }
-
-                Console.WriteLine();
-
-                foreach (var consoleImage in imageBytes?.Select(bytes => new CanvasImage(bytes)) ?? Array.Empty<CanvasImage>())
-                {
-                    consoleImage.MaxWidth = 50;
-                    AnsiConsole.Write(consoleImage);
-                }
-
-                Console.WriteLine();
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"The images were scaled down for the console only, the model gets full versions.");
-                Console.WriteLine();
+                Console.WriteLine("The executor has been enabled. In this example, the prompt is printed, the maximum tokens is set to {0} and the context size is {1}.", maxTokens, ex.Context.ContextSize);
 
-                // Initialize Images in executor
-                foreach (var image in imagePaths)
+                var inferenceParams = new InferenceParams
                 {
-                    executor.Images.Add(await File.ReadAllBytesAsync(image));
+                    SamplingPipeline = new DefaultSamplingPipeline
+                    {
+                        Temperature = 0.1f
+                    },
+
+                    AntiPrompts = new List<string> { "\nUSER:" },
+                    MaxTokens = maxTokens
+
+                };
+
+                var imageMatches = Regex.Matches(prompt, "{([^}]*)}").Select(m => m.Value);
+                var imageCount = imageMatches.Count();
+                var hasImages = imageCount > 0;
+
+                if (hasImages)
+                {
+                    var imagePathsWithCurlyBraces = Regex.Matches(prompt, "{([^}]*)}").Select(m => m.Value);
+                    var imagePaths = Regex.Matches(prompt, "{([^}]*)}").Select(m => m.Groups[1].Value).ToList();
+
+                    List<byte[]> imageBytes;
+                    try
+                    {
+                        imageBytes = imagePaths.Select(File.ReadAllBytes).ToList();
+                    }
+                    catch (IOException exception)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.Write(
+                            $"Could not load your {(imageCount == 1 ? "image" : "images")}:");
+                        Console.Write($"{exception.Message}");
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine("Please try again.");
+                        return "unknown";
+                    }
+
+                    ex.Context.NativeHandle.KvCacheRemove(LLamaSeqId.Zero, -1, -1);
+
+                    int index = 0;
+                    foreach (var path in imagePathsWithCurlyBraces)
+                    {
+                        // First image replace to tag <image, the rest of the images delete the tag
+                        prompt = prompt.Replace(path, index++ == 0 ? "<image>" : "");
+                    }
+
+                    foreach (var consoleImage in imageBytes?.Select(bytes => new CanvasImage(bytes)) ?? Array.Empty<CanvasImage>())
+                    {
+                        consoleImage.MaxWidth = 50;
+                        AnsiConsole.Write(consoleImage);
+                    }
+
+                    Console.WriteLine();
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"The images were scaled down for the console only, the model gets full versions.");
+                    Console.WriteLine();
+
+                    ex.Images.Clear();
+                    foreach (var image in imagePaths)
+                    {
+                        ex.Images.Add(await File.ReadAllBytesAsync(image));
+                    }
                 }
 
-                // Run inference
-                string label = "";
-                await foreach (var text in executor.InferAsync(prompt, inferenceParams))
+                Console.ForegroundColor = Color.White;
+                string finalLabel = string.Empty;
+                await foreach (var text in ex.InferAsync(prompt, inferenceParams))
                 {
-                    label += text;
+                    finalLabel += text;
+                    Console.Write(text);
                 }
 
-                label = label.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "unknown";
-                Console.WriteLine($"Label: {label}");
-                return label;
+                Console.WriteLine($"Label: {finalLabel}");
+                return finalLabel;
             }
-
-            return string.Empty;
         }
     }
 }

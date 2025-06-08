@@ -12,29 +12,24 @@ namespace AI.FileOrganizer.CLI
         public InteractiveExecutor Executor { get; private set; } = null!;
         public IChatCompletionService ChatService { get; private set; } = null!;
         public Dictionary<string, string> KnownDirs { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public string ModelPath { get; }
+        public string? MultiModalProj { get; }
 
         public ModelManager(string? modelPath, string? multiModalProj, int maxImageTokens)
         {
             if (string.IsNullOrWhiteSpace(modelPath))
                 throw new ArgumentNullException(nameof(modelPath), "ModelPath cannot be null or empty.");
 
+            ModelPath = modelPath;
+
             IsMultimodal = !string.IsNullOrWhiteSpace(multiModalProj);
+            MultiModalProj = multiModalProj;
+
             ModelParams parameters = new(modelPath);
             var model = LLamaWeights.LoadFromFileAsync(parameters).Result;
             var context = model.CreateContext(parameters);
 
-            if (IsMultimodal)
-            {
-                if (string.IsNullOrWhiteSpace(multiModalProj))
-                    throw new ArgumentNullException(nameof(multiModalProj), "MultiModalProj cannot be null or empty for multimodal mode.");
-
-                var clipModel = LLavaWeights.LoadFromFileAsync(multiModalProj).Result;
-                Executor = new InteractiveExecutor(context, clipModel);
-            }
-            else
-            {
-                Executor = new InteractiveExecutor(context);
-            }
+            Executor = new InteractiveExecutor(context);
 
             ChatService = new LLamaSharpChatCompletion(
                 Executor,

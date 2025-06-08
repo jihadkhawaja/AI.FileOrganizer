@@ -44,6 +44,7 @@ plugins.AddFromObject(organize, "FileOrganizer");
 var kernel = new Kernel(plugins: plugins);
 
 // CLI loop
+Console.Clear();
 var cli = new CliLoop(modelManager, kernel);
 cli.ListAvailableFunctions();
 await cli.RunAsync();

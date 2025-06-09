@@ -1,14 +1,18 @@
-using LLama;
 using LLama.Common;
 using LLama.Native;
 using LLama.Sampling;
-using LLamaSharp.SemanticKernel;
 using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.ChatCompletion;
 using Spectre.Console;
-using System.Reflection;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using LLamaSharp.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
 using ChatHistory = Microsoft.SemanticKernel.ChatCompletion.ChatHistory;
+using System.Reflection;
 
 namespace AI.FileOrganizer.CLI
 {
@@ -203,62 +207,88 @@ namespace AI.FileOrganizer.CLI
 
                         Console.WriteLine(output);
 
-                        // Debug: print multimodal status
-                        Console.ForegroundColor = ConsoleColor.Cyan;
-                        Console.WriteLine($"[DEBUG] IsMultimodal: {_modelManager.IsMultimodal}, Executor available: {_modelManager.Executor != null}");
-                        Console.ForegroundColor = ConsoleColor.White;
+                        var categorizeOutput = result.GetValue<string>();
+                        Console.WriteLine(categorizeOutput);
 
-                        if (_modelManager.IsMultimodal && _modelManager.Executor != null)
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine($"[DEBUG] IsMultimodal: {_modelManager.IsMultimodal}, MultimodalExecutor available: {_modelManager.MultimodalExecutor != null}");
+                        Console.ResetColor();
+
+                        if (_modelManager.IsMultimodal && _modelManager.MultimodalExecutor != null)
                         {
-                            var imagePaths = Regex.Matches(output ?? "", @"[^\s]+(\.jpg|\.jpeg|\.png|\.bmp|\.gif|\.webp|\.tiff)", RegexOptions.IgnoreCase)
-                                                  .Select(m => m.Value)
-                                                  .ToList();
+                            var imageExts = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff" };
+                            List<string> imagePaths;
+                            try
+                            {
+                                imagePaths = Directory.GetFiles(dir)
+                                    .Where(f => imageExts.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                                    .ToList();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                Console.WriteLine($"[Error] Failed to list image files in directory '{dir}': {ex.Message}");
+                                Console.ResetColor();
+                                imagePaths = new List<string>();
+                            }
 
                             if (imagePaths.Count == 0)
                             {
                                 Console.ForegroundColor = ConsoleColor.Yellow;
-                                Console.WriteLine("[WARNING] No image files found for vision labeling.");
-                                Console.ForegroundColor = ConsoleColor.White;
+                                Console.WriteLine("[WARNING] No image files found in the directory for vision labeling.");
+                                Console.ResetColor();
                             }
-
-                            var imageContextMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-                            if (imagePaths.Count > 0)
+                            else
                             {
-                                // Process one image at a time
+                                AnsiConsole.MarkupLine($"Found [yellow]{imagePaths.Count}[/] image(s) to process in '{dir}'.");
+                                var imageContextMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
                                 foreach (var imagePath in imagePaths)
                                 {
                                     var label = await ProcessSingleImage(imagePath);
-                                    if (!string.IsNullOrWhiteSpace(label))
+                                    if (!string.IsNullOrWhiteSpace(label) && !label.ToLower().Contains("error_") && !label.ToLower().Contains("unknown_"))
                                     {
                                         imageContextMap[imagePath] = label;
                                     }
+                                    else
+                                    {
+                                        Console.ForegroundColor = ConsoleColor.DarkYellow;
+                                        Console.WriteLine($"[Skipping] Image {Path.GetFileName(imagePath)} due to invalid or error label: '{label}'");
+                                        Console.ResetColor();
+                                    }
                                 }
 
-                                // Save for later organization
                                 _lastImageContextMap = imageContextMap;
 
-                                if (imageContextMap.Count > 0 && Confirm($"Organize images in '{dir}' by detected context labels"))
+                                if (imageContextMap.Count > 0)
                                 {
-                                    var organizeResult = await _kernel.InvokeAsync("FileOrganizer", "OrganizeImagesByContext", new() { ["directory"] = dir, ["imageContextMap"] = imageContextMap });
-                                    Console.WriteLine(organizeResult.GetValue<string>());
+                                     AnsiConsole.MarkupLine($"[green]Successfully labeled {imageContextMap.Count} image(s).[/]");
+                                    if (Confirm($"Organize these {imageContextMap.Count} images in '{dir}' by detected context labels"))
+                                    {
+                                        var organizeResult = await _kernel.InvokeAsync("FileOrganizer", "OrganizeImagesByContext", new() { ["directory"] = dir, ["imageContextMap"] = imageContextMap });
+                                        Console.WriteLine(organizeResult.GetValue<string>());
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("Organization action cancelled.");
+                                    }
                                 }
                                 else
                                 {
-                                    Console.WriteLine("No valid labels found or action cancelled.");
+                                     AnsiConsole.MarkupLine("[yellow]No images were successfully labeled with context.[/]");
                                 }
                             }
                         }
                         else
                         {
                             Console.ForegroundColor = ConsoleColor.Red;
-                            Console.WriteLine("[ERROR] Multimodal vision model is not available. Please check your model setup.");
-                            Console.ForegroundColor = ConsoleColor.White;
+                            Console.WriteLine("[ERROR] Multimodal vision model (MultimodalExecutor) is not available. Please check your model setup. Cannot categorize images by context.");
+                            Console.ResetColor();
                         }
                     }
                     else
                     {
-                        Console.WriteLine("Action cancelled.");
+                        Console.WriteLine("Image categorization action cancelled.");
                     }
                 }
                 else if (response.StartsWith("[COUNT PREVIOUS FILES]"))
@@ -376,101 +406,100 @@ namespace AI.FileOrganizer.CLI
             }
         }
 
-        private async Task<string> ProcessSingleImage(string imagePath)
+    private async Task<string> ProcessSingleImage(string imagePath)
+    {
+        if (!File.Exists(imagePath))
         {
-            if (!File.Exists(imagePath))
+            Console.ForegroundColor = ConsoleColor.DarkYellow;
+            Console.WriteLine($"[Warning] Image file not found: {imagePath}");
+            Console.ResetColor();
+            return "error_file_not_found";
+        }
+
+        if (!_modelManager.IsMultimodal || _modelManager.MultimodalExecutor == null || _modelManager.ClipModel == null)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("[Error] Multimodal executor or CLIP model is not available in ModelManager. Cannot process image.");
+            Console.ResetColor();
+            return "error_model_unavailable";
+        }
+
+        var multimodalExecutor = _modelManager.MultimodalExecutor;
+
+        const int maxTokens = 16;
+
+        // Ensure the prompt is a standard string literal or use verbatim if multi-line is intended here.
+        // For this type of prompt, a standard string with \n is usually safer.
+        var prompt = $"{{{imagePath}}}\nUSER:\nProvide a single short label (e.g. 'animal', 'invoice', 'text', 'nature', 'person', 'screenshot', 'art', 'other') describing the main content of the image. Only output the label.\nASSISTANT:\n";
+
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine($"Processing image: {Path.GetFileName(imagePath)} with shared multimodal executor. Max inference tokens: {maxTokens}. Context size: {multimodalExecutor.Context.ContextSize}.");
+        Console.ResetColor();
+
+        var inferenceParams = new InferenceParams
+        {
+            SamplingPipeline = new DefaultSamplingPipeline
             {
-                Console.WriteLine($"Image not found: {imagePath}");
-                return "unknown";
-            }
+                Temperature = 0.1f,
+                TopP = 0.9f
+            },
+            // Corrected AntiPrompts list with a verbatim string for the newline
+            AntiPrompts = new List<string> { @"
+USER:" },
+            MaxTokens = maxTokens
+        };
 
-            const int maxTokens = 16;
+        List<byte[]> imageBytesList;
+        try
+        {
+            imageBytesList = new List<byte[]> { File.ReadAllBytes(imagePath) };
+        }
+        catch (IOException ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[Error] Could not load image '{imagePath}': {ex.Message}");
+            Console.ResetColor();
+            return "error_image_load";
+        }
 
-            var prompt = $"{{{imagePath}}}\nUSER:\nProvide a single short label (e.g. 'animal', 'invoice', 'text', 'nature', 'person', 'screenshot', 'art', 'other') describing the main content of the image. Only output the label.\nASSISTANT:\n";
+        multimodalExecutor.Images.Clear();
+        multimodalExecutor.Context.NativeHandle.KvCacheRemove(LLamaSeqId.Zero, -1, -1);
 
-            // Llava Init
-            using var clipModel = await LLavaWeights.LoadFromFileAsync(_modelManager.MultiModalProj!);
+        prompt = prompt.Replace($"{{{imagePath}}}", "<image>");
+
+        foreach (var bytes in imageBytesList)
+        {
+            multimodalExecutor.Images.Add(bytes);
+            var consoleImage = new CanvasImage(bytes) { MaxWidth = 30 };
+            AnsiConsole.Write(consoleImage);
+            AnsiConsole.WriteLine();
+        }
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        AnsiConsole.MarkupLineInterpolated($"[grey]Image loaded into shared executor. Prompt for model: {prompt.Replace("<image>", "[IMAGE_TOKEN]")}[/]");
+        Console.ResetColor();
+
+        string finalLabel = string.Empty;
+        try
+        {
+            await foreach (var textChunk in multimodalExecutor.InferAsync(prompt, inferenceParams))
             {
-                var ex = new InteractiveExecutor(_modelManager.Executor.Context, clipModel);
-
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("The executor has been enabled. In this example, the prompt is printed, the maximum tokens is set to {0} and the context size is {1}.", maxTokens, ex.Context.ContextSize);
-
-                var inferenceParams = new InferenceParams
-                {
-                    SamplingPipeline = new DefaultSamplingPipeline
-                    {
-                        Temperature = 0.1f
-                    },
-
-                    AntiPrompts = new List<string> { "\nUSER:" },
-                    MaxTokens = maxTokens
-
-                };
-
-                var imageMatches = Regex.Matches(prompt, "{([^}]*)}").Select(m => m.Value);
-                var imageCount = imageMatches.Count();
-                var hasImages = imageCount > 0;
-
-                if (hasImages)
-                {
-                    var imagePathsWithCurlyBraces = Regex.Matches(prompt, "{([^}]*)}").Select(m => m.Value);
-                    var imagePaths = Regex.Matches(prompt, "{([^}]*)}").Select(m => m.Groups[1].Value).ToList();
-
-                    List<byte[]> imageBytes;
-                    try
-                    {
-                        imageBytes = imagePaths.Select(File.ReadAllBytes).ToList();
-                    }
-                    catch (IOException exception)
-                    {
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.Write(
-                            $"Could not load your {(imageCount == 1 ? "image" : "images")}:");
-                        Console.Write($"{exception.Message}");
-                        Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine("Please try again.");
-                        return "unknown";
-                    }
-
-                    ex.Context.NativeHandle.KvCacheRemove(LLamaSeqId.Zero, -1, -1);
-
-                    int index = 0;
-                    foreach (var path in imagePathsWithCurlyBraces)
-                    {
-                        // First image replace to tag <image, the rest of the images delete the tag
-                        prompt = prompt.Replace(path, index++ == 0 ? "<image>" : "");
-                    }
-
-                    foreach (var consoleImage in imageBytes?.Select(bytes => new CanvasImage(bytes)) ?? Array.Empty<CanvasImage>())
-                    {
-                        consoleImage.MaxWidth = 50;
-                        AnsiConsole.Write(consoleImage);
-                    }
-
-                    Console.WriteLine();
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine($"The images were scaled down for the console only, the model gets full versions.");
-                    Console.WriteLine();
-
-                    ex.Images.Clear();
-                    foreach (var image in imagePaths)
-                    {
-                        ex.Images.Add(await File.ReadAllBytesAsync(image));
-                    }
-                }
-
-                Console.ForegroundColor = Color.White;
-                string finalLabel = string.Empty;
-                await foreach (var text in ex.InferAsync(prompt, inferenceParams))
-                {
-                    finalLabel += text;
-                    Console.Write(text);
-                }
-
-                Console.WriteLine($"Label: {finalLabel}");
-                return finalLabel;
+                finalLabel += textChunk;
             }
         }
+        catch(Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[Error] Inference failed for image {imagePath}: {ex.Message}");
+            Console.ResetColor();
+            return "error_inference_failed";
+        }
+
+        finalLabel = finalLabel.Trim();
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"Label for {Path.GetFileName(imagePath)}: '{finalLabel}'");
+        Console.ResetColor();
+
+        return string.IsNullOrWhiteSpace(finalLabel) ? "unknown_empty_label" : finalLabel;
+    }
     }
 }

@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AI.FileOrganizer", "AI.File
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AI.FileOrganizer.CLI", "AI.FileOrganizer.CLI\AI.FileOrganizer.CLI.csproj", "{2598CDA4-1132-44B6-B471-06B08529DD33}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AI.FileOrganizer.Tests", "AI.FileOrganizer.Tests\AI.FileOrganizer.Tests.csproj", "{C35AA1B2-3C70-403B-B6D7-3981C02F281A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{2598CDA4-1132-44B6-B471-06B08529DD33}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2598CDA4-1132-44B6-B471-06B08529DD33}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2598CDA4-1132-44B6-B471-06B08529DD33}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C35AA1B2-3C70-403B-B6D7-3981C02F281A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C35AA1B2-3C70-403B-B6D7-3981C02F281A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C35AA1B2-3C70-403B-B6D7-3981C02F281A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C35AA1B2-3C70-403B-B6D7-3981C02F281A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

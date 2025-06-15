@@ -12,6 +12,7 @@
     <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.24.0" />
     <PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.24.0" />
     <PackageReference Include="LLamaSharp.semantic-kernel" Version="0.24.0" />
+    <PackageReference Include="MetadataExtractor" Version="2.8.1" />
     <PackageReference Include="Microsoft.SemanticKernel" Version="1.55.0" />
   </ItemGroup>
 

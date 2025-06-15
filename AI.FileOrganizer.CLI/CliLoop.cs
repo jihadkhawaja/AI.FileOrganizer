@@ -74,6 +74,7 @@ namespace AI.FileOrganizer.CLI
                     - [ORGANIZE FOLDERS BY PATTERN] {directory} {pattern}
                     - [CATEGORIZE FOLDERS BY SIZE] {directory}
                     - [ORGANIZE FOLDERS BY SIZE] {directory} {smallThreshold} {largeThreshold}
+                    - [ORGANIZE IMAGES BY DATE AND CONTEXT] {directory} {isMultimodal}
                     - [COUNT PREVIOUS FILES]
                     Only respond with the bracketed command and arguments.<end_of_turn>
                     <start_of_turn>model
@@ -367,6 +368,45 @@ namespace AI.FileOrganizer.CLI
                     else
                     {
                         Console.WriteLine("No image context map available. Please run image categorization first.");
+                    }
+                }
+                else if (response.StartsWith("[ORGANIZE IMAGES BY DATE AND CONTEXT]"))
+                {
+                    var parts = response.Substring("[ORGANIZE IMAGES BY DATE AND CONTEXT]".Length).Trim().Split(' ');
+                    if (parts.Length >= 1)
+                    {
+                        var dir = _modelManager.ResolveDir(parts[0]);
+                        bool isMultimodalValue = false; // Default to false
+                        if (parts.Length > 1)
+                        {
+                            if (!bool.TryParse(parts[1], out isMultimodalValue))
+                            {
+                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                Console.WriteLine($"Warning: Could not parse '{parts[1]}' as a boolean for isMultimodal. Defaulting to 'false'.");
+                                Console.ResetColor();
+                                isMultimodalValue = false;
+                            }
+                        }
+
+                        if (Confirm($"Organize images in '{dir}' by date and context (multimodal: {isMultimodalValue})"))
+                        {
+                            var result = await _kernel.InvokeAsync("FileOrganizer", "OrganizeImagesByDateAndContext",
+                                new KernelArguments
+                                {
+                                    ["directory"] = dir,
+                                    ["isMultimodal"] = isMultimodalValue,
+                                    ["kernel"] = _kernel // Pass the kernel instance
+                                });
+                            Console.WriteLine(result.GetValue<string>());
+                        }
+                        else
+                        {
+                            Console.WriteLine("Action cancelled.");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid command format. Usage: [ORGANIZE IMAGES BY DATE AND CONTEXT] {directory} {isMultimodal}");
                     }
                 }
                 else

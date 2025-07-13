@@ -9,7 +9,7 @@ namespace AI.FileOrganizer
     public class Organize
     {
         [KernelFunction, Description("Lists all files in the specified directory")]
-        public string[] ListFiles(string directory)
+        public string[] ListFiles([Description("The directory path to list files from")] string directory)
         {
             if (!Directory.Exists(directory))
                 return Array.Empty<string>();
@@ -17,7 +17,8 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Moves a file to a new directory")]
-        public string MoveFile(string sourceFilePath, string destinationDirectory)
+        public string MoveFile([Description("The full path to the source file")] string sourceFilePath, 
+                              [Description("The target directory path")] string destinationDirectory)
         {
             if (!File.Exists(sourceFilePath) || !Directory.Exists(destinationDirectory))
                 return "Source file or destination directory does not exist.";
@@ -30,7 +31,7 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Categorizes files in a directory by extension")]
-        public string CategorizeByExtension(string directory)
+        public string CategorizeByExtension([Description("The directory path to categorize files in")] string directory)
         {
             if (!Directory.Exists(directory))
                 return "Directory does not exist.";
@@ -49,7 +50,7 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Organizes files in the specified directory into subdirectories by extension")]
-        public string OrganizeByExtension(string directory)
+        public string OrganizeByExtension([Description("The directory path to organize files in")] string directory)
         {
             if (!Directory.Exists(directory))
                 return "Directory does not exist.";
@@ -74,7 +75,7 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Categorizes files in a directory by context of file name (e.g., by detected keywords or patterns)")]
-        public string CategorizeByNameContext(string directory)
+        public string CategorizeByNameContext([Description("The directory path to categorize files in")] string directory)
         {
             if (!Directory.Exists(directory))
                 return "Directory does not exist.";
@@ -99,7 +100,7 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Categorizes text files in a directory by context of file content (e.g., by detected keywords or topics)")]
-        public string CategorizeByContentContext(string directory)
+        public string CategorizeByContentContext([Description("The directory path to categorize files in")] string directory)
         {
             if (!Directory.Exists(directory))
                 return "Directory does not exist.";
@@ -144,7 +145,8 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Categorizes image files in a directory by context. If the model is not multimodal, categorizes by extension.")]
-        public string CategorizeImagesByContext(string directory, bool isMultimodal = false)
+        public string CategorizeImagesByContext([Description("The directory path to categorize images in")] string directory, 
+                                               [Description("Whether the model supports multimodal image analysis")] bool isMultimodal = false)
         {
             if (!Directory.Exists(directory))
                 return "Directory does not exist.";
@@ -183,7 +185,8 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Organizes image files in a directory into subfolders based on provided context labels. Provide a mapping of image file path to context label.")]
-        public string OrganizeImagesByContext(string directory, IDictionary<string, string> imageContextMap)
+        public string OrganizeImagesByContext([Description("The directory path to organize images in")] string directory, 
+                                             [Description("A dictionary mapping image file paths to their context labels")] IDictionary<string, string> imageContextMap)
         {
             if (!Directory.Exists(directory))
                 return "Directory does not exist.";
@@ -208,7 +211,8 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Categorizes folders in a directory by name pattern (e.g., prefix or substring)")]
-        public string CategorizeFoldersByNamePattern(string directory, string pattern)
+        public string CategorizeFoldersByNamePattern([Description("The directory path to categorize folders in")] string directory, 
+                                                    [Description("The pattern to match folder names against")] string pattern)
         {
             if (!Directory.Exists(directory))
                 return "Directory does not exist.";
@@ -228,7 +232,8 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Organizes folders in a directory into subfolders based on a name pattern (e.g., prefix or substring)")]
-        public string OrganizeFoldersByNamePattern(string directory, string pattern)
+        public string OrganizeFoldersByNamePattern([Description("The directory path to organize folders in")] string directory, 
+                                                  [Description("The pattern to match folder names against")] string pattern)
         {
             if (!Directory.Exists(directory))
                 return "Directory does not exist.";
@@ -255,7 +260,7 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Categorizes folders in a directory by the number of files they contain")]
-        public string CategorizeFoldersBySize(string directory)
+        public string CategorizeFoldersBySize([Description("The directory path to categorize folders in")] string directory)
         {
             if (!Directory.Exists(directory))
                 return "Directory does not exist.";
@@ -271,7 +276,9 @@ namespace AI.FileOrganizer
         }
 
         [KernelFunction, Description("Organizes folders in a directory into subfolders based on the number of files they contain (e.g., 'empty', 'small', 'large')")]
-        public string OrganizeFoldersBySize(string directory, int smallThreshold = 5, int largeThreshold = 20)
+        public string OrganizeFoldersBySize([Description("The directory path to organize folders in")] string directory, 
+                                           [Description("Threshold for small folders (default: 5)")] int smallThreshold = 5, 
+                                           [Description("Threshold for large folders (default: 20)")] int largeThreshold = 20)
         {
             if (!Directory.Exists(directory))
                 return "Directory does not exist.";

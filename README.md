@@ -5,6 +5,9 @@ AI.FileOrganizer is an AI-powered command-line tool for organizing and categoriz
 ## Features
 
 - **Natural Language CLI:** Interact with the tool using plain English commands.
+- **Intelligent Function Calling:** Automatically uses the best approach based on model capabilities:
+  - Auto function calling for tooling-capable models
+  - Manual command interpretation for non-tooling models
 - **File Listing & Moving:** List files in directories and move files between folders.
 - **Categorization:** Categorize files by extension, name context, or content context.
 - **Image Organization:** Categorize and organize images by extension or, with multimodal models, by image content.
@@ -16,6 +19,15 @@ AI.FileOrganizer is an AI-powered command-line tool for organizing and categoriz
 
 - `AI.FileOrganizer`: Core library with file/folder organization logic.
 - `AI.FileOrganizer.CLI`: Command-line interface, model management, and chat loop.
+
+### Architecture Overview
+
+The application uses a dual-approach architecture for function calling:
+
+- **Auto Function Calling**: For models that support tooling/function calling, uses Microsoft Semantic Kernel's built-in auto function invoke capabilities
+- **Manual Command Parsing**: For models that don't support tooling, uses manual command interpretation and function execution
+
+The system automatically detects model capabilities and selects the appropriate approach.
 
 ## Getting Started
 

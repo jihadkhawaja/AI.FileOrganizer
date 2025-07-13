@@ -8,16 +8,13 @@ namespace AI.FileOrganizer.CLI
     /// <summary>
     /// Function invoker that uses Semantic Kernel's auto function calling for models that support tooling
     /// </summary>
-    public class AutoFunctionInvoker : IFunctionInvoker
+    public class AutoFunctionInvoker : BaseFunctionInvoker
     {
-        private readonly ModelManager _modelManager;
-
-        public AutoFunctionInvoker(ModelManager modelManager)
+        public AutoFunctionInvoker(ModelManager modelManager) : base(modelManager)
         {
-            _modelManager = modelManager;
         }
 
-        public async Task<string> ProcessInputAsync(string userInput, Kernel kernel, IChatCompletionService chatService, CancellationToken cancellationToken = default)
+        public override async Task<string> ProcessInputAsync(string userInput, Kernel kernel, IChatCompletionService chatService, CancellationToken cancellationToken = default)
         {
             var chatHistory = new ChatHistory();
             
@@ -52,7 +49,7 @@ namespace AI.FileOrganizer.CLI
             }
             catch (Exception ex)
             {
-                return $"Error during function calling: {ex.Message}. Falling back to manual approach.";
+                return HandleError(ex, "function calling");
             }
         }
     }

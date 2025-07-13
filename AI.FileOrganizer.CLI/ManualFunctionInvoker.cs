@@ -14,18 +14,16 @@ namespace AI.FileOrganizer.CLI
     /// <summary>
     /// Function invoker that uses manual command parsing for models that don't support tooling
     /// </summary>
-    public class ManualFunctionInvoker : IFunctionInvoker
+    public class ManualFunctionInvoker : BaseFunctionInvoker
     {
-        private readonly ModelManager _modelManager;
         private string[]? _previousFiles;
         private Dictionary<string, string>? _lastImageContextMap;
 
-        public ManualFunctionInvoker(ModelManager modelManager)
+        public ManualFunctionInvoker(ModelManager modelManager) : base(modelManager)
         {
-            _modelManager = modelManager;
         }
 
-        public async Task<string> ProcessInputAsync(string userInput, Kernel kernel, IChatCompletionService chatService, CancellationToken cancellationToken = default)
+        public override async Task<string> ProcessInputAsync(string userInput, Kernel kernel, IChatCompletionService chatService, CancellationToken cancellationToken = default)
         {
             // Format chat history with control tokens for command interpretation
             var systemPrompt =
@@ -85,7 +83,7 @@ namespace AI.FileOrganizer.CLI
             {
                 if (response.StartsWith("[LIST FILES]"))
                 {
-                    var dir = _modelManager.ResolveDir(response.Replace("[LIST FILES]", "").Trim());
+                    var dir = ModelManager.ResolveDir(response.Replace("[LIST FILES]", "").Trim());
                     var result = await kernel.InvokeAsync("FileOrganizer", "ListFiles", new() { ["directory"] = dir });
                     _previousFiles = result.GetValue<string[]>() ?? Array.Empty<string>();
                     return _previousFiles.Length == 0 ? "No files found." : string.Join(Environment.NewLine, _previousFiles);
@@ -96,7 +94,7 @@ namespace AI.FileOrganizer.CLI
                     if (commandargs.Length == 2)
                     {
                         var src = commandargs[0];
-                        var dest = _modelManager.ResolveDir(commandargs[1]);
+                        var dest = ModelManager.ResolveDir(commandargs[1]);
                         if (ConfirmAction($"Move file '{src}' to '{dest}'"))
                         {
                             var result = await kernel.InvokeAsync("FileOrganizer", "MoveFile", new() { ["sourceFilePath"] = src, ["destinationDirectory"] = dest });
@@ -108,7 +106,7 @@ namespace AI.FileOrganizer.CLI
                 }
                 else if (response.StartsWith("[ORGANIZE FILES]"))
                 {
-                    var dir = _modelManager.ResolveDir(response.Replace("[ORGANIZE FILES]", "").Trim());
+                    var dir = ModelManager.ResolveDir(response.Replace("[ORGANIZE FILES]", "").Trim());
                     if (ConfirmAction($"Organize files in '{dir}' by extension"))
                     {
                         var result = await kernel.InvokeAsync("FileOrganizer", "OrganizeByExtension", new() { ["directory"] = dir });
@@ -118,7 +116,7 @@ namespace AI.FileOrganizer.CLI
                 }
                 else if (response.StartsWith("[CATEGORIZE FILES]"))
                 {
-                    var dir = _modelManager.ResolveDir(response.Replace("[CATEGORIZE FILES]", "").Trim());
+                    var dir = ModelManager.ResolveDir(response.Replace("[CATEGORIZE FILES]", "").Trim());
                     if (ConfirmAction($"Categorize files in '{dir}' by extension"))
                     {
                         var result = await kernel.InvokeAsync("FileOrganizer", "CategorizeByExtension", new() { ["directory"] = dir });
@@ -128,7 +126,7 @@ namespace AI.FileOrganizer.CLI
                 }
                 else if (response.StartsWith("[CATEGORIZE BY NAME CONTEXT]"))
                 {
-                    var dir = _modelManager.ResolveDir(response.Replace("[CATEGORIZE BY NAME CONTEXT]", "").Trim());
+                    var dir = ModelManager.ResolveDir(response.Replace("[CATEGORIZE BY NAME CONTEXT]", "").Trim());
                     if (ConfirmAction($"Categorize files in '{dir}' by name context"))
                     {
                         var result = await kernel.InvokeAsync("FileOrganizer", "CategorizeByNameContext", new() { ["directory"] = dir });
@@ -138,7 +136,7 @@ namespace AI.FileOrganizer.CLI
                 }
                 else if (response.StartsWith("[CATEGORIZE BY CONTENT CONTEXT]"))
                 {
-                    var dir = _modelManager.ResolveDir(response.Replace("[CATEGORIZE BY CONTENT CONTEXT]", "").Trim());
+                    var dir = ModelManager.ResolveDir(response.Replace("[CATEGORIZE BY CONTENT CONTEXT]", "").Trim());
                     if (ConfirmAction($"Categorize files in '{dir}' by content context"))
                     {
                         var result = await kernel.InvokeAsync("FileOrganizer", "CategorizeByContentContext", new() { ["directory"] = dir });
@@ -148,7 +146,7 @@ namespace AI.FileOrganizer.CLI
                 }
                 else if (response.StartsWith("[CATEGORIZE IMAGES BY CONTEXT]"))
                 {
-                    var dir = _modelManager.ResolveDir(response.Replace("[CATEGORIZE IMAGES BY CONTEXT]", "").Trim());
+                    var dir = ModelManager.ResolveDir(response.Replace("[CATEGORIZE IMAGES BY CONTEXT]", "").Trim());
                     return await ProcessImageCategorizationAsync(dir, kernel);
                 }
                 else if (response.StartsWith("[COUNT PREVIOUS FILES]"))
@@ -165,7 +163,7 @@ namespace AI.FileOrganizer.CLI
                 }
                 else if (response.StartsWith("[CATEGORIZE FOLDERS BY SIZE]"))
                 {
-                    var dir = _modelManager.ResolveDir(response.Replace("[CATEGORIZE FOLDERS BY SIZE]", "").Trim());
+                    var dir = ModelManager.ResolveDir(response.Replace("[CATEGORIZE FOLDERS BY SIZE]", "").Trim());
                     if (ConfirmAction($"Categorize folders in '{dir}' by size"))
                     {
                         var result = await kernel.InvokeAsync("FileOrganizer", "CategorizeFoldersBySize", new() { ["directory"] = dir });
@@ -179,8 +177,8 @@ namespace AI.FileOrganizer.CLI
                 }
                 else if (response.StartsWith("[ORGANIZE IMAGES BY CONTEXT]"))
                 {
-                    var dir = _modelManager.ResolveDir(response.Replace("[ORGANIZE IMAGES BY CONTEXT]", "").Trim());
-                    if (_modelManager.IsMultimodal && _lastImageContextMap != null && _lastImageContextMap.Count > 0)
+                    var dir = ModelManager.ResolveDir(response.Replace("[ORGANIZE IMAGES BY CONTEXT]", "").Trim());
+                    if (ModelManager.IsMultimodal && _lastImageContextMap != null && _lastImageContextMap.Count > 0)
                     {
                         if (ConfirmAction($"Organize images in '{dir}' by last detected context labels"))
                         {
@@ -199,7 +197,7 @@ namespace AI.FileOrganizer.CLI
             }
             catch (Exception ex)
             {
-                return $"Error processing command: {ex.Message}";
+                return HandleError(ex, "command processing");
             }
         }
 
@@ -210,10 +208,10 @@ namespace AI.FileOrganizer.CLI
                 return "Action cancelled.";
 
             var result = await kernel.InvokeAsync("FileOrganizer", "CategorizeImagesByContext", 
-                new() { ["directory"] = dir, ["isMultimodal"] = _modelManager.IsMultimodal });
+                new() { ["directory"] = dir, ["isMultimodal"] = ModelManager.IsMultimodal });
             var output = result.GetValue<string>() ?? "";
 
-            if (_modelManager.IsMultimodal && _modelManager.Executor != null)
+            if (ModelManager.IsMultimodal && ModelManager.Executor != null)
             {
                 var imagePaths = Regex.Matches(output, @"[^\s]+(\.jpg|\.jpeg|\.png|\.bmp|\.gif|\.webp|\.tiff)", RegexOptions.IgnoreCase)
                                       .Select(m => m.Value)
@@ -251,7 +249,7 @@ namespace AI.FileOrganizer.CLI
             var args = response.Replace("[CATEGORIZE FOLDERS BY PATTERN]", "").Trim().Split(' ', 2);
             if (args.Length == 2)
             {
-                var dir = _modelManager.ResolveDir(args[0]);
+                var dir = ModelManager.ResolveDir(args[0]);
                 var pattern = args[1];
                 if (ConfirmAction($"Categorize folders in '{dir}' by pattern '{pattern}'"))
                 {
@@ -269,7 +267,7 @@ namespace AI.FileOrganizer.CLI
             var args = response.Replace("[ORGANIZE FOLDERS BY PATTERN]", "").Trim().Split(' ', 2);
             if (args.Length == 2)
             {
-                var dir = _modelManager.ResolveDir(args[0]);
+                var dir = ModelManager.ResolveDir(args[0]);
                 var pattern = args[1];
                 if (ConfirmAction($"Organize folders in '{dir}' by pattern '{pattern}'"))
                 {
@@ -287,7 +285,7 @@ namespace AI.FileOrganizer.CLI
             var args = response.Replace("[ORGANIZE FOLDERS BY SIZE]", "").Trim().Split(' ', 3);
             if (args.Length >= 1)
             {
-                var dir = _modelManager.ResolveDir(args[0]);
+                var dir = ModelManager.ResolveDir(args[0]);
                 int small = 5, large = 20;
                 if (args.Length >= 2) int.TryParse(args[1], out small);
                 if (args.Length == 3) int.TryParse(args[2], out large);
@@ -302,12 +300,7 @@ namespace AI.FileOrganizer.CLI
             return "Invalid organize folders by size command.";
         }
 
-        private bool ConfirmAction(string actionDesc)
-        {
-            Console.Write($"Confirm action: {actionDesc}? (y/n): ");
-            var confirm = Console.ReadLine();
-            return confirm != null && confirm.Trim().ToLower() == "y";
-        }
+
 
         private async Task<string> ProcessSingleImageAsync(string imagePath)
         {
@@ -318,7 +311,7 @@ namespace AI.FileOrganizer.CLI
             }
 
             // If not multimodal, use simple pattern-based categorization
-            if (!_modelManager.IsMultimodal || string.IsNullOrEmpty(_modelManager.MultiModalProj))
+            if (!ModelManager.IsMultimodal || string.IsNullOrEmpty(ModelManager.MultiModalProj))
             {
                 var fileName = Path.GetFileNameWithoutExtension(imagePath).ToLowerInvariant();
                 
@@ -339,8 +332,8 @@ namespace AI.FileOrganizer.CLI
             try
             {
                 // Llava Init
-                using var clipModel = await LLavaWeights.LoadFromFileAsync(_modelManager.MultiModalProj!);
-                var ex = new InteractiveExecutor(_modelManager.Executor.Context, clipModel);
+                using var clipModel = await LLavaWeights.LoadFromFileAsync(ModelManager.MultiModalProj!);
+                var ex = new InteractiveExecutor(ModelManager.Executor.Context, clipModel);
 
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.WriteLine("Processing image with multimodal model. Max tokens: {0}, Context size: {1}.", maxTokens, ex.Context.ContextSize);

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AI.FileOrganizer.CLI/AI.FileOrganizer.CLI.csproj" />
+  <Project Path="AI.FileOrganizer/AI.FileOrganizer.csproj" />
+</Solution>

@@ -1,103 +1,91 @@
 # AI.FileOrganizer
 
-AI.FileOrganizer is an AI-powered command-line tool for organizing and categorizing files and folders on your computer. It leverages local LLMs (such as Llama/Llava/Gemma) via [LLamaSharp](https://github.com/SciSharp/LLamaSharp) and [Microsoft Semantic Kernel](https://github.com/microsoft/semantic-kernel) to interpret natural language instructions and automate file management tasks.
+AI.FileOrganizer is an AI-powered command-line tool that helps you organize files and folders using natural language instructions.
 
-## Features
+It is built with the [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/) and uses pluggable AI providers to interpret intent, select the right tools, and safely execute file operations.
 
-- **Natural Language CLI:** Interact with the tool using plain English commands.
-- **File Listing & Moving:** List files in directories and move files between folders.
-- **Categorization:** Categorize files by extension, name context, or content context.
-- **Image Organization:** Categorize and organize images by extension or, with multimodal models, by image content.
-- **Folder Organization:** Organize folders by name patterns or by the number of files they contain.
-- **Extensible:** Easily add new organization or categorization strategies.
-- **Confirmation Prompts:** The CLI will ask for confirmation before executing any file-changing action.
+## What It Does
 
-## Project Structure
+- Accepts natural language requests from a CLI.
+- Uses an AI agent to classify intent and choose appropriate tools.
+- Performs file and folder operations through focused tool modules.
+- Supports multiple AI backends through a provider abstraction layer.
 
-- `AI.FileOrganizer`: Core library with file/folder organization logic.
-- `AI.FileOrganizer.CLI`: Command-line interface, model management, and chat loop.
+## High-Level Architecture
 
-## Getting Started
-
-### Prerequisites
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-- A compatible Llama/Llava/Gemma model file (see below)
-- (Optional) CUDA or Vulkan drivers for GPU acceleration
-
-### Build
-
-```sh
-dotnet build
+```mermaid
+flowchart LR
+	User["User (Natural Language Request)"] --> CLI["AI.FileOrganizer.CLI"]
+	CLI --> Agent["Microsoft Agent Framework Orchestrator"]
+	Agent --> Selector["ToolSelector"]
+	Selector --> FileTools["FileTools"]
+	Selector --> FolderTools["FolderTools"]
+	Agent --> Providers["AI Provider Layer\n(OpenAI / Azure OpenAI / Ollama)"]
+	FileTools --> FS["Local File System"]
+	FolderTools --> FS
 ```
 
-### Configuration
+## Projects
 
-Set up your model paths using [user secrets](https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets):
+- `AI.FileOrganizer`: Core library containing intent handling and tool selection.
+- `AI.FileOrganizer.CLI`: Command-line host that runs the agent workflow.
 
-```sh
-dotnet user-secrets set "ModelPath" "<path-to-your-model>"
-dotnet user-secrets set "MultiModalProj" "<path-to-your-multimodal-proj>" # Optional, for multimodal models
+## Download and Run (Prebuilt Binaries)
+
+Prebuilt binaries are published for each tagged release in GitHub Releases:
+
+- `AI.FileOrganizer-win-x64.zip`
+- `AI.FileOrganizer-linux-x64.zip`
+- `AI.FileOrganizer-osx-arm64.zip`
+
+Download from: [Releases](https://github.com/jihadkhawaja/AI.FileOrganizer/releases)
+
+### 1. Extract the archive
+
+Extract the archive for your platform into any folder.
+
+### 2. Configure provider settings
+
+Open `config.yaml` in the extracted folder and set the provider you want to use.
+
+Example:
+
+```yaml
+OpenAI:
+  ApiKey: "your-api-key"
+  Model: "gpt-4o-mini"
 ```
 
-### Run
+### 3. Run the CLI
 
-```sh
-dotnet run --project AI.FileOrganizer.CLI
+Windows (`win-x64`):
+
+```powershell
+.\AI.FileOrganizer.CLI.exe
 ```
 
-### Example Usage
+Linux (`linux-x64`):
 
-```
-> List files in Downloads
-> Move file report.pdf to Documents
-> Organize files in Desktop by extension
-> Categorize images in Pictures by content
+```bash
+chmod +x ./AI.FileOrganizer.CLI
+./AI.FileOrganizer.CLI
 ```
 
-The assistant will interpret your intent and prompt for confirmation before making changes.
+macOS Apple Silicon (`osx-arm64`):
 
-### Example Prompts
-
-When you type a command, it's automatically formatted for the Gemma model like this:
-
-```
-list Downloads files
+```bash
+chmod +x ./AI.FileOrganizer.CLI
+./AI.FileOrganizer.CLI
 ```
 
-You can also use custom file paths:
+The app will prompt you to choose a provider and then accept natural-language file organization requests.
 
+## Build from Source
+
+```powershell
+dotnet build AI.FileOrganizer.slnx
+dotnet run --project AI.FileOrganizer.CLI/AI.FileOrganizer.CLI.csproj
 ```
-move C:\Work\Reports\2025\project_report.pdf to D:\Backup\Archive
-```
-
-For image categorization (using multimodel vision), the format includes image data:
-
-```
-categorize images in my <path>
-```
-
-```
-organize images in my <path>
-```
-
-## Supported Commands
-
-- `[LIST FILES] {directory}`
-- `[MOVE FILE] {sourceFilePath} {destinationDirectory}`
-- `[CATEGORIZE FILES] {directory}`
-- `[ORGANIZE FILES] {directory}`
-- `[CATEGORIZE BY NAME CONTEXT] {directory}`
-- `[CATEGORIZE BY CONTENT CONTEXT] {directory}`
-- `[CATEGORIZE IMAGES BY CONTEXT] {directory}`
-- `[COUNT PREVIOUS FILES]`
-
-## Recommended Multimodal Models
-
-For best results with image and content-based categorization, use one of these GGUF models (download and set the path in your user secrets):
-
-- [google/gemma-3-4b-it-qat-q4_0-gguf](https://huggingface.co/google/gemma-3-4b-it-qat-q4_0-gguf/tree/main)
-- [unsloth/gemma-3-4b-it-GGUF](https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/tree/main)
 
 ## License
 
@@ -105,4 +93,4 @@ This project is licensed under the [MIT License](LICENSE.txt).
 
 ---
 
-*Powered by LLamaSharp and Microsoft Semantic Kernel.*
+*Powered by [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/).*

@@ -7,10 +7,14 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/AI.FileOrganizer.sln",
+                "${workspaceFolder}/AI.FileOrganizer.slnx",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
             "problemMatcher": "$msCompile"
         },
         {
@@ -19,7 +23,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/AI.FileOrganizer.sln",
+                "${workspaceFolder}/AI.FileOrganizer.slnx",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary;ForceNoAlign"
             ],
@@ -33,7 +37,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/AI.FileOrganizer.sln"
+                "${workspaceFolder}/AI.FileOrganizer.CLI/AI.FileOrganizer.CLI.csproj"
             ],
             "problemMatcher": "$msCompile"
         }

@@ -9,18 +9,43 @@ namespace AI.FileOrganizer.CLI.Providers;
 
 public static class AgentFactory
 {
-    public static AIAgent Create(ProviderType provider, IConfiguration config, IList<AITool> tools, string instructions, ChatHistoryProvider? chatHistoryProvider = null)
+    /// <summary>
+    /// Creates an IChatClient for the given provider. The client is reusable across multiple agent instances.
+    /// </summary>
+    public static IChatClient CreateChatClient(ProviderType provider, IConfiguration config)
     {
         return provider switch
         {
-            ProviderType.OpenAI => CreateOpenAIAgent(config, tools, instructions, chatHistoryProvider),
-            ProviderType.Anthropic => CreateAnthropicAgent(config, tools, instructions, chatHistoryProvider),
-            ProviderType.OpenAICompatible => CreateOpenAICompatibleAgent(config, tools, instructions, chatHistoryProvider),
+            ProviderType.OpenAI => CreateOpenAIChatClient(config),
+            ProviderType.Anthropic => CreateAnthropicChatClient(config),
+            ProviderType.OpenAICompatible => CreateOpenAICompatibleChatClient(config),
             _ => throw new ArgumentOutOfRangeException(nameof(provider))
         };
     }
 
-    private static AIAgent CreateOpenAIAgent(IConfiguration config, IList<AITool> tools, string instructions, ChatHistoryProvider? chatHistoryProvider)
+    /// <summary>
+    /// Creates an AIAgent from an existing chat client with the given tools and options.
+    /// Lightweight — can be called per-request to scope tools by intent.
+    /// </summary>
+    public static AIAgent CreateAgent(IChatClient chatClient, IList<AITool> tools, string instructions, ChatHistoryProvider? chatHistoryProvider = null, ReasoningEffort? reasoningEffort = null)
+    {
+        return chatClient.AsAIAgent(new ChatClientAgentOptions
+        {
+            ChatOptions = new() { Instructions = instructions, Tools = tools, Reasoning = BuildReasoningOptions(reasoningEffort) },
+            ChatHistoryProvider = chatHistoryProvider
+        });
+    }
+
+    /// <summary>
+    /// Creates a fully configured agent in one step (convenience overload).
+    /// </summary>
+    public static AIAgent Create(ProviderType provider, IConfiguration config, IList<AITool> tools, string instructions, ChatHistoryProvider? chatHistoryProvider = null, ReasoningEffort? reasoningEffort = null)
+    {
+        var chatClient = CreateChatClient(provider, config);
+        return CreateAgent(chatClient, tools, instructions, chatHistoryProvider, reasoningEffort);
+    }
+
+    private static IChatClient CreateOpenAIChatClient(IConfiguration config)
     {
         var apiKey = config["OpenAI:ApiKey"]
             ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
@@ -31,14 +56,10 @@ public static class AgentFactory
             ?? "gpt-4o-mini";
 
         var client = new OpenAIClient(new ApiKeyCredential(apiKey));
-        return client.GetChatClient(model).AsIChatClient().AsAIAgent(new ChatClientAgentOptions
-        {
-            ChatOptions = new() { Instructions = instructions, Tools = tools },
-            ChatHistoryProvider = chatHistoryProvider
-        });
+        return client.GetChatClient(model).AsIChatClient();
     }
 
-    private static AIAgent CreateAnthropicAgent(IConfiguration config, IList<AITool> tools, string instructions, ChatHistoryProvider? chatHistoryProvider)
+    private static IChatClient CreateAnthropicChatClient(IConfiguration config)
     {
         var apiKey = config["Anthropic:ApiKey"]
             ?? Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY")
@@ -49,14 +70,10 @@ public static class AgentFactory
             ?? "claude-haiku-4-5";
 
         var client = new Anthropic.AnthropicClient { ApiKey = apiKey };
-        return client.AsIChatClient(model, 4096).AsAIAgent(new ChatClientAgentOptions
-        {
-            ChatOptions = new() { Instructions = instructions, Tools = tools },
-            ChatHistoryProvider = chatHistoryProvider
-        });
+        return client.AsIChatClient(model, 4096);
     }
 
-    private static AIAgent CreateOpenAICompatibleAgent(IConfiguration config, IList<AITool> tools, string instructions, ChatHistoryProvider? chatHistoryProvider)
+    private static IChatClient CreateOpenAICompatibleChatClient(IConfiguration config)
     {
         var endpoint = config["OpenAICompatible:Endpoint"]
             ?? Environment.GetEnvironmentVariable("OPENAI_COMPATIBLE_ENDPOINT")
@@ -72,10 +89,14 @@ public static class AgentFactory
 
         var options = new OpenAIClientOptions { Endpoint = new Uri(endpoint) };
         var client = new OpenAIClient(new ApiKeyCredential(apiKey), options);
-        return client.GetChatClient(model).AsIChatClient().AsAIAgent(new ChatClientAgentOptions
-        {
-            ChatOptions = new() { Instructions = instructions, Tools = tools },
-            ChatHistoryProvider = chatHistoryProvider
-        });
+        return client.GetChatClient(model).AsIChatClient();
+    }
+
+    private static ReasoningOptions? BuildReasoningOptions(ReasoningEffort? effort)
+    {
+        if (effort is null)
+            return null;
+
+        return new ReasoningOptions { Effort = effort };
     }
 }

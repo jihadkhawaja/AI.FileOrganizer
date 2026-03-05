@@ -1,3 +1,4 @@
+using AI.FileOrganizer;
 using AI.FileOrganizer.CLI.Providers;
 using AI.FileOrganizer.Tools;
 using Microsoft.Agents.AI;
@@ -22,6 +23,8 @@ if (!File.Exists(configFileName))
           Endpoint: "http://localhost:1234/v1"
           ApiKey: "lm-studio"
           Model: "default"
+
+        ThinkingLevel: "low"
 
         PersistMemory: true
         """.Replace("        ", ""));
@@ -48,21 +51,23 @@ var providerType = providerChoice switch
     _ => throw new InvalidOperationException("Unknown provider")
 };
 
-// Register all tools
+// Register all tools (wrap destructive/mutating tools with approval requirement)
 var tools = new List<AITool>
 {
     AIFunctionFactory.Create(FileTools.ListFiles),
-    AIFunctionFactory.Create(FileTools.MoveFile),
-    AIFunctionFactory.Create(FileTools.OrganizeByExtension),
+    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(FileTools.MoveFile)),
+    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(FileTools.CopyFile)),
+    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(FileTools.DeleteFile)),
+    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(FileTools.OrganizeByExtension)),
     AIFunctionFactory.Create(FileTools.CategorizeByNameContext),
     AIFunctionFactory.Create(FileTools.CategorizeByContentContext),
-    AIFunctionFactory.Create(FileTools.OrganizeAllByType),
+    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(FileTools.OrganizeAllByType)),
     AIFunctionFactory.Create(FolderTools.ListFolders),
-    AIFunctionFactory.Create(FolderTools.MoveFolder),
-    AIFunctionFactory.Create(FolderTools.CopyFolder),
-    AIFunctionFactory.Create(FolderTools.DeleteFolder),
-    AIFunctionFactory.Create(FolderTools.OrganizeFoldersByNamePattern),
-    AIFunctionFactory.Create(FolderTools.OrganizeFoldersBySize),
+    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(FolderTools.MoveFolder)),
+    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(FolderTools.CopyFolder)),
+    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(FolderTools.DeleteFolder)),
+    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(FolderTools.OrganizeFoldersByNamePattern)),
+    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(FolderTools.OrganizeFoldersBySize)),
 };
 
 var instructions = $"""
@@ -82,19 +87,32 @@ ChatHistoryProvider chatHistoryProvider = persistMemory
     ? new FileChatHistoryProvider()
     : new InMemoryChatHistoryProvider();
 
-// Create agent
-AIAgent agent;
+// Parse thinking level
+ReasoningEffort? reasoningEffort = config["ThinkingLevel"]?.ToLowerInvariant() switch
+{
+    "low" => ReasoningEffort.Low,
+    "high" => ReasoningEffort.High,
+    _ => null
+};
+
+// Create chat client once (reused across per-request agents)
+IChatClient chatClient;
 try
 {
-    agent = AgentFactory.Create(providerType, config, tools, instructions, chatHistoryProvider);
+    chatClient = AgentFactory.CreateChatClient(providerType, config);
 }
 catch (Exception ex)
 {
-    AnsiConsole.MarkupLine($"[red]Failed to create AI agent: {Markup.Escape(ex.Message)}[/]");
+    AnsiConsole.MarkupLine($"[red]Failed to create AI client: {Markup.Escape(ex.Message)}[/]");
     return;
 }
 
-// Create a session for persistent context across runs
+// Helper to create a scoped agent with the given tool set
+AIAgent CreateScopedAgent(IList<AITool> scopedTools) =>
+    AgentFactory.CreateAgent(chatClient, scopedTools, instructions, chatHistoryProvider, reasoningEffort);
+
+// Create initial agent with all tools and a session
+var agent = CreateScopedAgent(tools);
 var session = await agent.CreateSessionAsync();
 
 // Display available tools
@@ -134,11 +152,47 @@ while (true)
 
     try
     {
-        await foreach (var update in agent.RunStreamingAsync(input, session))
+        // Optimize tool selection based on user intent
+        var (intent, selectedTools) = ToolSelector.SelectToolsForInput(input, tools);
+        agent = CreateScopedAgent(selectedTools);
+
+        if (intent != IntentType.General)
         {
-            AnsiConsole.Markup($"[white]{Markup.Escape(update.ToString())}[/]");
+            AnsiConsole.MarkupLine($"[dim]Intent: {intent} — {selectedTools.Count}/{tools.Count} tools selected[/]");
         }
-        AnsiConsole.WriteLine();
+
+        var response = await agent.RunAsync(input, session);
+
+        // Handle tool approval requests
+        var approvalRequests = response.Messages
+            .SelectMany(m => m.Contents)
+            .OfType<FunctionApprovalRequestContent>()
+            .ToList();
+
+        while (approvalRequests.Count > 0)
+        {
+            foreach (var request in approvalRequests)
+            {
+                AnsiConsole.MarkupLine($"[yellow]Approval required for tool:[/] [cyan]{Markup.Escape(request.FunctionCall.Name)}[/]");
+                AnsiConsole.MarkupLine($"[dim]Arguments: {Markup.Escape(request.FunctionCall.Arguments?.ToString() ?? "(none)")}[/]");
+
+                var approved = AnsiConsole.Confirm("[yellow]Approve?[/]");
+                var approvalMessage = new ChatMessage(ChatRole.User, [request.CreateResponse(approved)]);
+                response = await agent.RunAsync(approvalMessage, session);
+            }
+
+            approvalRequests = response.Messages
+                .SelectMany(m => m.Contents)
+                .OfType<FunctionApprovalRequestContent>()
+                .ToList();
+        }
+
+        // Print final response text
+        var text = response.Messages
+            .SelectMany(m => m.Contents)
+            .OfType<TextContent>()
+            .Select(t => t.Text);
+        AnsiConsole.MarkupLine($"[white]{Markup.Escape(string.Join("", text))}[/]");
     }
     catch (Exception ex)
     {

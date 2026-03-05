@@ -37,6 +37,33 @@ public static class FileTools
         return $"Moved {fileName} to {destinationDirectory}";
     }
 
+    [Description("Copies a file to a new directory")]
+    public static string CopyFile(
+        [Description("The full path to the source file")] string sourceFilePath,
+        [Description("The target directory path")] string destinationDirectory)
+    {
+        if (!File.Exists(sourceFilePath))
+            return "Source file does not exist.";
+        if (!Directory.Exists(destinationDirectory))
+            return "Destination directory does not exist.";
+
+        var fileName = Path.GetFileName(sourceFilePath);
+        var destPath = Path.Combine(destinationDirectory, fileName);
+        File.Copy(sourceFilePath, destPath, overwrite: true);
+        return $"Copied {fileName} to {destinationDirectory}";
+    }
+
+    [Description("Deletes a file")]
+    public static string DeleteFile(
+        [Description("The full path to the file to delete")] string filePath)
+    {
+        if (!File.Exists(filePath))
+            return "File does not exist.";
+
+        File.Delete(filePath);
+        return $"Deleted {Path.GetFileName(filePath)}";
+    }
+
     [Description("Organizes files in a directory into subdirectories grouped by file extension. Set preview to true to only see the categorization without moving files.")]
     public static string OrganizeByExtension(
         [Description("The directory path to organize files in")] string directory,

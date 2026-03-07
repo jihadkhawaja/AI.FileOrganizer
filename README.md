@@ -80,6 +80,95 @@ chmod +x ./AI.FileOrganizer.CLI
 
 The app will prompt you to choose a provider and then accept natural-language file organization requests.
 
+## Recurring Schedules
+
+The recommended scheduling model is to run the CLI once per job and let the operating system handle recurrence.
+
+Why this design:
+
+- The current app is a console host, not a Windows service.
+- OS schedulers are more reliable for restarts, missed runs, and machine reboots.
+- Each run stays deterministic: load config, execute one prompt, exit.
+
+Add one or more jobs to `config.yaml`:
+
+```yaml
+Jobs:
+  - Name: "downloads-cleanup"
+    Prompt: "Organize files in Downloads by type"
+    Provider: "OpenAI"
+    AutoApprove: true
+    PersistMemory: false
+    ThinkingLevel: "low"
+    Schedule: "Daily at midnight"
+    Enabled: true
+```
+
+Generate a sample job block:
+
+```powershell
+dotnet run --project AI.FileOrganizer.CLI/AI.FileOrganizer.CLI.csproj -- --job-template downloads-cleanup
+```
+
+Create a job interactively and write it into `config.yaml`:
+
+```powershell
+dotnet run --project AI.FileOrganizer.CLI/AI.FileOrganizer.CLI.csproj -- --create-job
+```
+
+Run a job once:
+
+```powershell
+dotnet run --project AI.FileOrganizer.CLI/AI.FileOrganizer.CLI.csproj -- --job downloads-cleanup
+```
+
+List configured jobs:
+
+```powershell
+dotnet run --project AI.FileOrganizer.CLI/AI.FileOrganizer.CLI.csproj -- --list-jobs
+```
+
+Print the Windows Task Scheduler action for a job:
+
+```powershell
+dotnet run --project AI.FileOrganizer.CLI/AI.FileOrganizer.CLI.csproj -- --task-command downloads-cleanup
+```
+
+You can also use the wrapper scripts instead of the full `dotnet run` command.
+
+PowerShell:
+
+```powershell
+./scripts/ai-fileorganizer.ps1 create-job
+./scripts/ai-fileorganizer.ps1 list-jobs
+./scripts/ai-fileorganizer.ps1 job-template downloads-cleanup
+./scripts/ai-fileorganizer.ps1 run-job downloads-cleanup
+./scripts/ai-fileorganizer.ps1 task-command downloads-cleanup
+```
+
+Linux/macOS:
+
+```bash
+chmod +x ./scripts/ai-fileorganizer.sh
+./scripts/ai-fileorganizer.sh create-job
+./scripts/ai-fileorganizer.sh list-jobs
+./scripts/ai-fileorganizer.sh job-template downloads-cleanup
+./scripts/ai-fileorganizer.sh run-job downloads-cleanup
+./scripts/ai-fileorganizer.sh task-command downloads-cleanup
+```
+
+For unattended execution, set `AutoApprove: true`. If a job triggers an approval-gated tool and `AutoApprove` is `false`, the run will fail instead of hanging.
+
+### Windows Task Scheduler
+
+Create a task that runs the CLI on your preferred cadence. Example action:
+
+```powershell
+dotnet run --project "C:\path\to\AI.FileOrganizer.CLI\AI.FileOrganizer.CLI.csproj" -- --job downloads-cleanup
+```
+
+If you publish the app first, point Task Scheduler to the published executable instead of `dotnet run`.
+
 ## Build from Source
 
 ```powershell

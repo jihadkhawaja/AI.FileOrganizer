@@ -1,3 +1,6 @@
+# Notice
+**This repository has ben archived and won't be maintained**. Please check [OneShotPrompt](https://github.com/jihadkhawaja/OneShotPrompt) instead.
+
 # AI.FileOrganizer
 
 AI.FileOrganizer is an AI-powered command-line tool that helps you organize files and folders using natural language instructions.

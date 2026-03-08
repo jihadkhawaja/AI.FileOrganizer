@@ -62,11 +62,43 @@ internal sealed class FileChatHistoryProvider : ChatHistoryProvider
         _messages ??= LoadFromFile();
 
         var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages ?? []);
-        _messages.AddRange(allNewMessages);
+        _messages.AddRange(SanitizeMessagesForPersistence(allNewMessages));
 
         SaveToFile(_messages);
 
         return default;
+    }
+
+    private static IEnumerable<ChatMessage> SanitizeMessagesForPersistence(IEnumerable<ChatMessage> messages)
+    {
+        foreach (var message in messages)
+        {
+            var sanitizedMessage = SanitizeMessageForPersistence(message);
+            if (sanitizedMessage is not null)
+            {
+                yield return sanitizedMessage;
+            }
+        }
+    }
+
+    private static ChatMessage? SanitizeMessageForPersistence(ChatMessage message)
+    {
+        var persistableContents = message.Contents
+            .Where(IsPersistableContent)
+            .ToArray();
+
+        if (persistableContents.Length == 0)
+        {
+            return null;
+        }
+
+        return new ChatMessage(message.Role, persistableContents);
+    }
+
+    private static bool IsPersistableContent(AIContent content)
+    {
+        return content is not FunctionApprovalRequestContent
+            && !string.Equals(content.GetType().Name, "FunctionApprovalResponseContent", StringComparison.Ordinal);
     }
 
     private List<ChatMessage> LoadFromFile()
